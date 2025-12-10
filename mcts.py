@@ -1,9 +1,14 @@
 import math
-from random import choice
+import random
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from time import time
 from typing import List, Tuple
 
-# from agents.Group41.board_state import Board, Move
+from src.Move import Move
+from src.Colour import Colour
+from agents.Group41.preprocess import encode_board
 
 class Node:
     def __init__(self, parent=None, prior=0):
@@ -22,7 +27,7 @@ class Node:
         """A node with no children is a leaf node"""
         return len(self.children) == 0
 
-    def expand(self, priors: List[(Move, int)]) -> None:
+    def expand(self, priors: List[Tuple[Move, int]]) -> None:
         """
         Expands node by creating children
         priors: List of (move, prob) tuples from neural network
@@ -41,13 +46,12 @@ class Node:
         return max(self.children.items(), key=lambda item: item[1].visits)[0]
 
 class MCTS:
-    def __init__(self, game):
+    def __init__(self, game, model):
         self.game = game
-        # TODO: add param for NN model and maybe extra args 
-        # e.g c_puct constant used by AlphaZero for Polynomial
-        # Upper Confidence Trees (PUCT) algorithm
+        self.model = model
+        self.c_puct = 1.0       # higher c_puct = higher tendency to explore 'new' knowledge in find_best_child()
 
-    def search(self, board: Board, time_limit: int) -> Node:
+    def search(self, board: BoardStateNP, time_limit: float) -> Move:
         """
         Main MCTS Loop
 
@@ -56,16 +60,14 @@ class MCTS:
             time_limit (int): Time allowed for move in seconds
         """
         root = Node()
-
         start = time()
-        end = time()
 
-        while end - start < time_limit:
+        while time() - start < time_limit:
 
-            # 1: Selection
             node = root
             search_board = board.copy()
 
+            # 1: Selection
             while not node.is_leaf():
                 move, node = self.find_best_child(node)
                 search_board.play_move(move)
@@ -74,31 +76,43 @@ class MCTS:
             value, finished = search_board.get_result()
 
             if not finished:
-                # if self.model:
-                #   TODO: Neural network implementation
-                #   priors, value = self.mode.predict(search_board)
+                # Preparing neural network input
+                player = 1 if search_board.current_colour == Colour.RED else 2
+                input_tensor = encode_board(search_board.get_numpy(), player)
+                device = next(self.model.parameters()).device
 
-                # FALLBACK: uniform priors (1 / num_moves)
+                # Inference
+                with torch.no_grad():
+                    policy_vector, value_tensor = self.model(input_tensor)
+
+                # Value is expected win rate [-1, 1]
+                value = value_tensor.item()
+
+                # Process policy
                 legal_moves = search_board.get_legal_moves()
-                prob = 1.0 / len(legal_moves)
-                priors = [(move, prob) for move in legal_moves]
+                logits = policy_vector.squeeze() # (11, 11)
+                move_logits = []
+                for move in legal_moves:
+                    move_logits.append(logits[move.x, move.y])
+                
+                # Ensuring sum of probabilities = 1.0
+                move_probs = F.softmax(torch.stack(move_logits), dim=0).tolist()
+
+                # Expand
+                priors = list(zip(legal_moves, move_probs))
                 node.expand(priors)
 
-            # 3: Simulation
-            if not finished:
-                # if self.model:
-                #   TODO: Neural network implementation
-                #   pass (value came from step 2 with NN)
-
-                # FALLBACK: play random moves until end of game to get a result
-                value = self.random_simulation(search_board)
-            
-            # 4: Backpropagation
+            # 3: Backpropagation
             while node is not None:
                 node.update(value)
                 value = -value
                 node = node.parent
+
+        # TODO: Clarify if root may have no children for small time_limit
+        if not root.children:
+            return random.choice(board.get_legal_moves())
             
+        # TODO: Explore using action = N(s,a)^(1/t) / Σ_b N(s,b)^(1/t) and finetuning 't'
         return root.most_visits()
 
     def find_best_child(self, node: Node) -> Tuple[Move, Node]:
@@ -120,8 +134,3 @@ class MCTS:
                 best_child = child
 
         return best_move, best_child
-
-    def random_simulation(self, board: Board) -> int:
-        """Random rollout fallback for simulation phase"""
-        # TODO
-        return 0
