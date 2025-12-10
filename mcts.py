@@ -59,6 +59,44 @@ class MCTS:
             board (Board): The current board state
             time_limit (int): Time allowed for move in seconds
         """
+        root = _run_search(board, time_limit)
+
+        # TODO: Clarify if root may have no children for small time_limit
+        if not root.children:
+            return random.choice(board.get_legal_moves())
+            
+        # TODO: Explore using action = N(s,a)^(1/t) / Σ_b N(s,b)^(1/t) and finetuning 't'
+        return root.most_visits()
+
+    def search_for_selfplay(self, board: BoardStateNP, time_limit: float) -> Move:
+        """
+        Runs MCTS and returns root node (for data extraction)
+        Identical logic to search(), just different return type :D
+        """
+        return _run_search(board, time_limit)
+
+    def find_best_child(self, node: Node) -> Tuple[Move, Node]:
+        """Choose child with highest PUCT"""
+        best_score = float('-inf')
+        best_move = None
+        best_child = None
+
+        sqrt_parent_visits = math.sqrt(node.visits)
+
+        for move, child in node.children.items():
+            q = child.value
+            u = self.c_puct * child.prior * (sqrt_parent_visits / (1 + child.visits))
+            score = q + u
+
+            if score > best_score:
+                best_score = score
+                best_move = move
+                best_child = child
+
+        return best_move, best_child
+
+    def _run_search(self, board: BoardStateNP, time_limit: float) -> Node:
+        """Private helper of MCTS main loop to support runtime and selfplay data extraction"""
         root = Node()
         start = time()
 
@@ -107,30 +145,5 @@ class MCTS:
                 node.update(value)
                 value = -value
                 node = node.parent
-
-        # TODO: Clarify if root may have no children for small time_limit
-        if not root.children:
-            return random.choice(board.get_legal_moves())
-            
-        # TODO: Explore using action = N(s,a)^(1/t) / Σ_b N(s,b)^(1/t) and finetuning 't'
-        return root.most_visits()
-
-    def find_best_child(self, node: Node) -> Tuple[Move, Node]:
-        """Choose child with highest PUCT"""
-        best_score = float('-inf')
-        best_move = None
-        best_child = None
-
-        sqrt_parent_visits = math.sqrt(node.visits)
-
-        for move, child in node.children.items():
-            q = child.value
-            u = self.c_puct * child.prior * (sqrt_parent_visits / (1 + child.visits))
-            score = q + u
-
-            if score > best_score:
-                best_score = score
-                best_move = move
-                best_child = child
-
-        return best_move, best_child
+        
+        return root
