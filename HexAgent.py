@@ -1,11 +1,11 @@
-from random import choice
-
 from src.AgentBase import AgentBase
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
-from agents.Group41.mcts import MCTS
 
+from agents.Group41.mcts import MCTS
+from agents.Group41.board_state import BoardStateNP
+from agents.Group41.model import load_model
 
 class HexAgent(AgentBase):
     """This class implements our Hex agent.
@@ -16,14 +16,10 @@ class HexAgent(AgentBase):
     You CANNOT modify the AgentBase class, otherwise your agent might not function.
     """
 
-    _choices: list[Move]
-    _board_size: int = 11
-
     def __init__(self, colour: Colour):
         super().__init__(colour)
-        self._choices = [
-            (i, j) for i in range(self._board_size) for j in range(self._board_size)
-        ]
+        self.model = load_model("agents/Group41/weights.pt")
+        self.mcts = MCTS(game=None, model=self.model)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """The game engine will call this method to request a move from the agent.
@@ -41,9 +37,16 @@ class HexAgent(AgentBase):
             Move: The agent's move
         """
 
-        # if turn == 2 and choice([0, 1]) == 1:
+        # 1. Convert Engine Board to NumPy Board
+        board_np = BoardStateNP(board)
+        board_np.current_colour = self.colour
+
+        # 2. Handle Swap Rule
+        # TODO: Add opening move database
         if turn == 2:
             return Move(-1, -1)
-        else:
-            x, y = choice(self._choices)
-            return Move(x, y)
+
+        # 3. Run MCTS
+        # TODO: Update time_limit to be dynamic on remaining game time
+        best_move = self.mcts.search(board_np, time_limit=5.0)
+        return best_move
