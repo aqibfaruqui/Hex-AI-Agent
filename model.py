@@ -15,7 +15,7 @@ class HexNN(nn.Module):
             policy_logits: (B, 11, 11) - move probabilities
             value: (B,) - board evaluation (-1: Opponent win, +1: Player win)
     """
-    def _init_(self, board_size=11, channels=64):
+    def __init__(self, board_size=11, channels=64):
         super()._init_()
         self.board_size = board_size
 
