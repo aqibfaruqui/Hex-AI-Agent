@@ -9,6 +9,7 @@ from typing import List, Tuple
 from src.Move import Move
 from src.Colour import Colour
 from agents.Group41.preprocess import encode_board
+from agents.Group41.board_state import BoardStateNP
 
 class Node:
     def __init__(self, parent=None, prior=0):
@@ -59,7 +60,7 @@ class MCTS:
             board (Board): The current board state
             time_limit (int): Time allowed for move in seconds
         """
-        root = _run_search(board, time_limit)
+        root = self._run_search(board, time_limit)
 
         # TODO: Clarify if root may have no children for small time_limit
         if not root.children:
@@ -73,7 +74,7 @@ class MCTS:
         Runs MCTS and returns root node (for data extraction)
         Identical logic to search(), just different return type :D
         """
-        return _run_search(board, time_limit)
+        return self._run_search(board, time_limit)
 
     def find_best_child(self, node: Node) -> Tuple[Move, Node]:
         """Choose child with highest PUCT"""
@@ -114,31 +115,35 @@ class MCTS:
             value, finished = search_board.get_result()
 
             if not finished:
-                # Preparing neural network input
-                player = 1 if search_board.current_colour == Colour.RED else 2
-                input_tensor = encode_board(search_board.get_numpy(), player)
-                device = next(self.model.parameters()).device
+                if self.model:
+                    # Preparing neural network input
+                    player = 1 if search_board.current_colour == Colour.RED else 2
+                    input_tensor = encode_board(search_board.get_numpy(), player)
+                    device = next(self.model.parameters()).device
 
-                # Inference
-                with torch.no_grad():
-                    policy_vector, value_tensor = self.model(input_tensor)
+                    # Inference
+                    with torch.no_grad():
+                        policy_vector, value_tensor = self.model(input_tensor)
 
-                # Value is expected win rate [-1, 1]
-                value = value_tensor.item()
+                    # Value is expected win rate [-1, 1]
+                    value = value_tensor.item()
 
-                # Process policy
-                legal_moves = search_board.get_legal_moves()
-                logits = policy_vector.squeeze() # (11, 11)
-                move_logits = []
-                for move in legal_moves:
-                    move_logits.append(logits[move.x, move.y])
+                    # Process policy
+                    legal_moves = search_board.get_legal_moves()
+                    logits = policy_vector.squeeze() # (11, 11)
+                    move_logits = []
+                    for move in legal_moves:
+                        move_logits.append(logits[move.x, move.y])
+                    
+                    # Ensuring sum of probabilities = 1.0
+                    move_probs = F.softmax(torch.stack(move_logits), dim=0).tolist()
+
+                    # Expand
+                    priors = list(zip(legal_moves, move_probs))
+                    node.expand(priors)
                 
-                # Ensuring sum of probabilities = 1.0
-                move_probs = F.softmax(torch.stack(move_logits), dim=0).tolist()
-
-                # Expand
-                priors = list(zip(legal_moves, move_probs))
-                node.expand(priors)
+                else:
+                    value = self.random_simulation(search_board)
 
             # 3: Backpropagation
             while node is not None:
@@ -147,3 +152,20 @@ class MCTS:
                 node = node.parent
         
         return root
+
+    def random_simulation(self, board: BoardStateNP) -> int:
+        """Private helper of MCTS main loop to support development without completed neural network"""
+        search_board = board.copy()
+
+        while True:
+            value, finished = search_board.get_result()
+            if finished:
+                return value
+
+            moves = search_board.get_legal_moves()
+            if not moves: break
+            move = random.choice(moves)
+            search_board.play_move(move)
+        
+        return 0
+                

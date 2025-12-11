@@ -19,7 +19,7 @@ class HexAgent(AgentBase):
     def __init__(self, colour: Colour):
         super().__init__(colour)
         self.model = load_model("agents/Group41/weights.pt")
-        self.mcts = MCTS(game=None, model=self.model)
+        self.mcts = MCTS(game=None, model=None)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """The game engine will call this method to request a move from the agent.
@@ -48,5 +48,5 @@ class HexAgent(AgentBase):
 
         # 3. Run MCTS
         # TODO: Update time_limit to be dynamic on remaining game time
-        best_move = self.mcts.search(board_np, time_limit=5.0)
+        best_move = self.mcts.search(board_np, time_limit=0.05)
         return best_move

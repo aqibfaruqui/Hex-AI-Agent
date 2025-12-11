@@ -16,7 +16,7 @@ class HexNN(nn.Module):
             value: (B,) - board evaluation (-1: Opponent win, +1: Player win)
     """
     def __init__(self, board_size=11, channels=64):
-        super()._init_()
+        super().__init__()
         self.board_size = board_size
 
         # Shared convolutional trunk

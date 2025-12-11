@@ -12,7 +12,6 @@ from src.Move import Move
 from src.Colour import Colour
 from agents.Group41.dsu import DSU
 
-
 class BoardStateNP:
     """
     A NumPy-based wrapper around the engine's Board class.
