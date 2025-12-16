@@ -6,20 +6,21 @@ from src.Colour import Colour
 from src.Board import Board
 from agents.Group41.board_state import BoardStateNP
 from agents.Group41.mcts import MCTS
-from agents.Group41.model import load_model
+from agents.Group41.model import load_model, HexNN
 from agents.Group41.preprocess import encode_board
 
 # TODO: Add nice print statements for logging self play data generation
 
-def run_self_play(num_games=100, filepath="agents/Group41/data.pt"):
+def run_self_play(games_per_batch=10, num_games=1000):
     # Load current best model
     model = load_model("agents/Group41/weights.pt")
     examples = []   # (board_state, policy_target, value_target)
-
-    for i in range(num_games):
+    game_count = 0
+    
+    for game_count < num_games:
         start = time.time()
         board = BoardStateNP(Board(11))
-        mcts = MCTS(game=None, model=model)
+        mcts = MCTS(game=None, model=model, tt=True)
         history = []    # (encoded_board, policy_probabilities, current_player)
 
         while True:
@@ -31,21 +32,23 @@ def run_self_play(num_games=100, filepath="agents/Group41/data.pt"):
             counts = np.zeros((11, 11), dtype=np.float32)
             visits = sum(child.visits for child in root.children.values())
 
-            for move, child in root.children.items():
-                counts[move.x, move.y] = child.visits
-
             if visits > 0:
+                for move, child in root.children.items():
+                    counts[move.x, move.y] = child.visits
                 policy_target = counts / visits
             else:
                 policy_target = np.ones((11, 11)) / 121.0       # TODO: Confirm that this shouldn't be possible
 
             # Save board state before 'self playing' a move
             player = 1 if board.current_colour == Colour.RED else 2
-            encoded_board = encode_board(board.get_numpy(), player)
+            encoded_board = encode_board(board.get_numpy(), player).cpu()   # Move training data to CPU to save GPU for inference
             history.append([encoded_board, policy_target, board.current_colour])
 
-            # Play the move MCTS would have picked
-            best_move = roots.most_visits()
+            # Select Best Move (Deterministic for strong play, or Weighted for exploration?)
+            # AlphaZero uses weighted random for first 30 moves, then deterministic.
+            # For simplicity now: Weighted Random (Exploration) that MCTS would have played
+            # best_move = weighted_pick(root)   # TODO: Implement later for better exploration
+            best_move = root.most_visits()
             board.play_move(best_move)
 
             # Play to end of game
@@ -58,11 +61,17 @@ def run_self_play(num_games=100, filepath="agents/Group41/data.pt"):
                     outcome = 1.0 if _player == winner else -1.0
                     examples.append((_board, _policy, outcome))
 
+                game_count += 1
+                print(f'Game {game_count} finished in {time.time()-start:.1f}s. Winner: {winner}')
                 break
 
         # Saving generated data files in batches for neural network training
-        id = int(time.time())
-        torch.save(examples, f"agents/Group41/data_{id}.pt")
+        if len(examples) >= (games_per_batch * 50): # Assuming 50 moves per game
+            timestamp = int(time.time())
+            filename = f"agents/Group41/data_{timestamp}.pt"
+            torch.save(examples, filename)
+            print(f'Saved batch to {filename} ({len(examples)} positions)')
+            examples = []   # Reset buffer
 
 if __name__ == "__main__":
     run_self_play()
