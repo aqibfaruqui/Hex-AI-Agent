@@ -47,10 +47,14 @@ class Node:
         return max(self.children.items(), key=lambda item: item[1].visits)[0]
 
 class MCTS:
-    def __init__(self, game, model):
+    def __init__(self, game, model, tt=True):
         self.game = game
         self.model = model
         self.c_puct = 1.0       # higher c_puct = higher tendency to explore 'new' knowledge in find_best_child()
+        self.tt = tt            # optionally use transposition table for experiment
+        self.transposition = {}
+        self.transposition_hits = 0
+        self.total_simulations = 0
 
     def search(self, board: BoardStateNP, time_limit: float) -> Move:
         """
@@ -100,8 +104,11 @@ class MCTS:
         """Private helper of MCTS main loop to support runtime and selfplay data extraction"""
         root = Node()
         start = time()
+        self.transposition_hits = 0
+        self.total_simulations = 0
 
         while time() - start < time_limit:
+            self.total_simulations += 1
 
             node = root
             search_board = board.copy()
@@ -110,6 +117,12 @@ class MCTS:
             while not node.is_leaf():
                 move, node = self.find_best_child(node)
                 search_board.play_move(move)
+
+                if self.tt:
+                    board_bytes = search_board.get_numpy().tobytes()
+                    if board_bytes in self.transposition and self.transposition[board_bytes] is not node:
+                        node = self.transposition[board_bytes]
+                        self.transposition_hits += 1
             
             # 2: Expansion
             value, finished = search_board.get_result()
@@ -144,6 +157,13 @@ class MCTS:
                 
                 else:
                     value = self.random_simulation(search_board)
+                    legal_moves = search_board.get_legal_moves()
+                    priors = [(m, 1.0/len(legal_moves)) for m in legal_moves]
+                    node.expand(priors)
+
+            if self.tt:
+                board_bytes = search_board.get_numpy().tobytes()
+                self.transposition[board_bytes] = node
 
             # 3: Backpropagation
             while node is not None:
