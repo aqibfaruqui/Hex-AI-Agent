@@ -19,7 +19,7 @@ class HexAgent(AgentBase):
     def __init__(self, colour: Colour):
         super().__init__(colour)
         self.model = load_model("agents/Group41/weights.pt")
-        self.mcts = MCTS(game=None, model=None)
+        self.mcts = MCTS(game=None, model=self.model)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """The game engine will call this method to request a move from the agent.

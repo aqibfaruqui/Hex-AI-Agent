@@ -17,7 +17,7 @@ def run_self_play(games_per_batch=10, num_games=1000):
     examples = []   # (board_state, policy_target, value_target)
     game_count = 0
     
-    for game_count < num_games:
+    while game_count < num_games:
         start = time.time()
         board = BoardStateNP(Board(11))
         mcts = MCTS(game=None, model=model, tt=True)
