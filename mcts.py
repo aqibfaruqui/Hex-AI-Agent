@@ -131,8 +131,9 @@ class MCTS:
                 if self.model:
                     # Preparing neural network input
                     player = 1 if search_board.current_colour == Colour.RED else 2
-                    input_tensor = encode_board(search_board.get_numpy(), player)
                     device = next(self.model.parameters()).device
+                    input_tensor = encode_board(search_board.get_numpy(), player)
+                    input_tensor = input_tensor.to(device)
 
                     # Inference
                     with torch.no_grad():
