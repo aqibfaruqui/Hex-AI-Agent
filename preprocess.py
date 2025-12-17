@@ -1,40 +1,28 @@
 import torch
 import numpy as np
 
-
 def encode_board(board, current_player):
-
-    #create empty channels
-    player = np.zeros((11, 11), dtype=np.float32)
-    opponent = np.zeros((11, 11), dtype=np.float32)
-    empty = np.zeros((11, 11), dtype=np.float32)
-
-    #loop through every board position and assign it to the correct channel.
-    for i in range(11):
-        for j in range(11):
-            val = board[i][j]
-
-            #empty position
-            if val == 0:
-                empty[i, j] = 1.0
-            #stone belongs to current player
-            elif val == current_player:
-                player[i, j] = 1.0
-            #else opponent    
-            else:
-                opponent[i, j] = 1.0
-
-    #stack the binary masks into one array with channels first  (3, 11, 11)
-    stacked = np.stack([player, opponent, empty], axis=0)
-    # Add a batch dimension so the network receives shape (1, 3, 11, 11)
-    stacked = np.expand_dims(stacked, axis=0)
-    #convert to tensor
-    tensor = torch.from_numpy(stacked).float()
-
-    return tensor
-
+    """
+    Optimized board encoding using NumPy vectorization.
+    Input:
+        board: (11, 11) numpy array
+        current_player: int (1 or 2)
+    Output:
+        Tensor shape (1, 3, 11, 11)
+    """
+    opponent = 3 - current_player
     
-
+    # NumPy creates 3 boolean arrays
+    mask_player = (board == current_player)
+    mask_opponent = (board == opponent)
+    mask_empty = (board == 0)
+    
+    # Stack and convert to Float (True -> 1.0, False -> 0.0)
+    stacked = np.stack([mask_player, mask_opponent, mask_empty], axis=0).astype(np.float32)
+    
+    # Add Batch Dimension and convert to Tensor
+    # Output shape: (1, 3, 11, 11)
+    return torch.from_numpy(stacked).unsqueeze(0)
+    
 def move_to_device(tensor, device):
-    #move tensor to correct device
     return tensor.to(device)
