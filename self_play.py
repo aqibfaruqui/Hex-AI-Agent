@@ -1,7 +1,8 @@
-import torch
-import numpy as np
 import os
 import time
+import random
+import torch
+import numpy as np
 from src.Colour import Colour
 from src.Board import Board
 from agents.Group41.board_state import BoardStateNP
@@ -11,7 +12,7 @@ from agents.Group41.preprocess import encode_board
 
 # TODO: Add nice print statements for logging self play data generation
 
-def run_self_play(games_per_batch=1, num_games=10):
+def run_self_play(games_per_batch=10, num_games=10):
     os.makedirs("agents/Group41/data", exist_ok=True)
     model = load_model("agents/Group41/weights.pt")     # Load current best model
     model.eval()
@@ -59,7 +60,7 @@ def run_self_play(games_per_batch=1, num_games=10):
             # on an untrained neural network
             moves = list(root.children.keys())
             visits = [child.visits for child in root.children.values()]
-            if visits:
+            if visits and sum(visits) > 0:
                 probs = np.array(visits) / sum(visits)
                 choice_idx = np.random.choice(len(moves), p=probs)
                 best_move = moves[choice_idx]
