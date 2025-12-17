@@ -1,16 +1,17 @@
+import os
+import random
+import glob
 import torch
 import torch.optim as optim
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-import glob
-import os
-import random
-from agents.Group41.model import HexNN, load_model
+from agents.Group41.model import HexNN, load_model, detect_gpu
 
 BATCH_SIZE = 64        # Adjust based on GPU VRAM (maybe 64-256)
 LEARNING_RATE = 0.001
-EPOCHS = 1             # Train 1 epoch on the new data
 WEIGHTS_PATH = "agents/Group41/weights.pt"
+DATA_PATH = "agents/Group41/data/data_*.pt"
 
 class HexDataset(Dataset):
     def __init__(self, data_files):
@@ -27,27 +28,33 @@ class HexDataset(Dataset):
 
     def __getitem__(self, idx):
         board, policy, value = self.samples[idx]
-        # board is already tensor (3,11,11)
+
+        # board comes in as (1, 3, 11, 11)
+        # squeeze the batch dim so it becomes (3, 11, 11)
+        # DataLoader will then re-add the batch dim correctly
+        board = board.squeeze(0)
+        
         # policy is numpy (11,11) -> needs flattening to 121
         # value is float -> needs tensor
-        
         policy_tensor = torch.tensor(policy.flatten(), dtype=torch.float32)
         value_tensor = torch.tensor(value, dtype=torch.float32)
         
         return board, policy_tensor, value_tensor
 
 def train():
-    if torch.cuda.is_available():
-        print("NVIDIA GPU Detected")
-        return torch.device("cuda")
-    elif torch.backends.mps.is_available():     # TODO: Remove and move to training on AP Calc's GPU
-        print("Apple GPU Detected")
-        return torch.device("mps")
-    else:
-        print("CPU Detected")
-        return torch.device("cpu")
-        
-    print(f"Training on {device}")
+    device = detect_gpu()
+    print(f'Training on {device}', flush=True)
+    print(f'Looking for data in: {DATA_PATH}', flush=True)
+    
+    files = glob.glob(DATA_PATH)
+    if not files:
+        print("No training data found! Run selfplay.py first :D", flush=True)
+        return
+
+    print(f'Found {len(files)} data files', flush=True)
+    dataset = HexDataset(files)
+    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    print(f'Dataset size: {len(dataset)} positions', flush=True)
 
     if os.path.exists(WEIGHTS_PATH):
         model = load_model(WEIGHTS_PATH)
@@ -56,20 +63,6 @@ def train():
     
     model.train() # Switch to 'train' mode to enable Dropout/BatchNorm updates (which 'eval' doesn't have)
     optimiser = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
-    
-    files = glob.glob("agents/Group41/data_*.pt")
-    if not files:
-        print("No training data found! Run selfplay.py first :D")
-        return
-
-    print(f"Found {len(files)} data files.")
-    dataset = HexDataset(files)
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
-    
-    print(f"Dataset size: {len(dataset)} positions")
-
-    total_loss = 0
-    steps = 0
     
     # Loss functions
     # Policy: Cross Entropy (Probability distribution)
@@ -96,8 +89,6 @@ def train():
         loss = policy_loss + value_loss
         loss.backward()
         optimiser.step()            # i.e. weight = weight - (learning rate * gradient)
-        total_loss += loss.item()   # Running sum of error scores
-        steps += 1
         
         # Printing loss (should go down as we train)
         if batch_idx % 10 == 0:

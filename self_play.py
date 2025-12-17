@@ -11,9 +11,10 @@ from agents.Group41.preprocess import encode_board
 
 # TODO: Add nice print statements for logging self play data generation
 
-def run_self_play(games_per_batch=10, num_games=1000):
-    # Load current best model
-    model = load_model("agents/Group41/weights.pt")
+def run_self_play(games_per_batch=1, num_games=10):
+    os.makedirs("agents/Group41/data", exist_ok=True)
+    model = load_model("agents/Group41/weights.pt")     # Load current best model
+    model.eval()
     examples = []   # (board_state, policy_target, value_target)
     game_count = 0
     
@@ -22,6 +23,7 @@ def run_self_play(games_per_batch=10, num_games=1000):
         board = BoardStateNP(Board(11))
         mcts = MCTS(game=None, model=model, tt=True)
         history = []    # (encoded_board, policy_probabilities, current_player)
+        moves_count = 0
 
         while True:
             # Get MCTS root node to extract probabilities (as opposed to a 'best move')
@@ -30,12 +32,12 @@ def run_self_play(games_per_batch=10, num_games=1000):
             # Extract target policy (search probabilities)
             # Network tries to predict 'visit count / total visits' for each child
             counts = np.zeros((11, 11), dtype=np.float32)
-            visits = sum(child.visits for child in root.children.values())
+            total_visits = sum(child.visits for child in root.children.values())
 
-            if visits > 0:
+            if total_visits > 0:
                 for move, child in root.children.items():
                     counts[move.x, move.y] = child.visits
-                policy_target = counts / visits
+                policy_target = counts / total_visits
             else:
                 policy_target = np.ones((11, 11)) / 121.0       # TODO: Confirm that this shouldn't be possible
 
@@ -48,8 +50,24 @@ def run_self_play(games_per_batch=10, num_games=1000):
             # AlphaZero uses weighted random for first 30 moves, then deterministic.
             # For simplicity now: Weighted Random (Exploration) that MCTS would have played
             # best_move = weighted_pick(root)   # TODO: Implement later for better exploration
-            best_move = root.most_visits()
+            
+            # best_move = root.most_visits()    # TODO: Or allow this to play again when there is some trained data
+            # board.play_move(best_move)
+
+            # For now, temperature sampling to randomly pick based on visit count 
+            # (instead of defaulting to max visits) to see different games even
+            # on an untrained neural network
+            moves = list(root.children.keys())
+            visits = [child.visits for child in root.children.values()]
+            if visits:
+                probs = np.array(visits) / sum(visits)
+                choice_idx = np.random.choice(len(moves), p=probs)
+                best_move = moves[choice_idx]
+            else:
+                # Fallback if no simulations (shouldn't happen)
+                best_move = random.choice(board.get_legal_moves())
             board.play_move(best_move)
+            moves_count += 1
 
             # Play to end of game
             value, finished = board.get_result()
@@ -68,7 +86,7 @@ def run_self_play(games_per_batch=10, num_games=1000):
         # Saving generated data files in batches for neural network training
         if len(examples) >= (games_per_batch * 50): # Assuming 50 moves per game
             timestamp = int(time.time())
-            filename = f"agents/Group41/data_{timestamp}.pt"
+            filename = f"agents/Group41/data/data_{timestamp}.pt"
             torch.save(examples, filename)
             print(f'Saved batch to {filename} ({len(examples)} positions)')
             examples = []   # Reset buffer
