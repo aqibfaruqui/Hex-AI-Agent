@@ -17,7 +17,7 @@ class HexDataset(Dataset):
         self.samples = []
         for file in data_files:
             try:
-                data = torch.load(file)
+                data = torch.load(file, weights_only=False)
                 self.samples.extend(data)
             except Exception as e:
                 print(f"Error loading {file}: {e}")
@@ -37,7 +37,16 @@ class HexDataset(Dataset):
         return board, policy_tensor, value_tensor
 
 def train():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        print("NVIDIA GPU Detected")
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():     # TODO: Remove and move to training on AP Calc's GPU
+        print("Apple GPU Detected")
+        return torch.device("mps")
+    else:
+        print("CPU Detected")
+        return torch.device("cpu")
+        
     print(f"Training on {device}")
 
     if os.path.exists(WEIGHTS_PATH):
