@@ -25,12 +25,26 @@ def run_self_play(games_per_batch=50, num_games=50):
 
         while True:
             mcts.search(0.1)
-            probs = np.array(mcts.get_action_probs(), dtype=np.float32)
+            probs = np.array(mcts.get_action_probs(), dtype=np.float64) 
             prob_sum = np.sum(probs)
             
             # Normalise exactly to 1.0
             if prob_sum > 0:
                 probs /= prob_sum
+            else:
+                # Fallback: If MCTS returns 0s (should be rare), play random valid move
+                legal_moves = board.get_legal_moves()
+                probs = np.zeros(121, dtype=np.float64)
+                if legal_moves:
+                    uniform_prob = 1.0 / len(legal_moves)
+                    for move in legal_moves:
+                        probs[move] = uniform_prob
+                else:
+                    # No legal moves? Game should be over.
+                    break 
+
+            # Double check for tiny floating point errors
+            probs = probs / np.sum(probs)            
 
             policy_target = np.array(probs, dtype=np.float32).reshape(11, 11)   # convert the policy list to numpy array
             raw_board_list = board.board
