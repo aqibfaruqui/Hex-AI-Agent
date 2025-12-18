@@ -10,7 +10,7 @@ from agents.Group41.mcts_cpp import BoardState, MCTS
 
 # TODO: Add nice print statements for logging self play data generation
 
-def run_self_play(games_per_batch=10, num_games=10):
+def run_self_play(games_per_batch=50, num_games=50):
     os.makedirs("agents/Group41/data", exist_ok=True)
     model_path = "agents/Group41/cpp_weights.pt"
     examples = []   # (board_state, policy_target, value_target)
@@ -24,7 +24,7 @@ def run_self_play(games_per_batch=10, num_games=10):
         moves_count = 0
 
         while True:
-            mcts.search(0.5)
+            mcts.search(0.1)
             probs = np.array(mcts.get_action_probs(), dtype=np.float32)
             prob_sum = np.sum(probs)
             

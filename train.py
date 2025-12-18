@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from agents.Group41.model import HexNN, load_model, detect_gpu
 
-BATCH_SIZE = 64        # Adjust based on GPU VRAM (maybe 64-256)
+BATCH_SIZE = 2048      # Adjust based on GPU VRAM (maybe 64-256)
 LEARNING_RATE = 0.001
 WEIGHTS_PATH = "agents/Group41/weights.pt"
 DATA_PATH = "agents/Group41/data/data_*.pt"
