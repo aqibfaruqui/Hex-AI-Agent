@@ -1,11 +1,18 @@
+import os
+import sys
+import torch
+import numpy as np
+
 from src.AgentBase import AgentBase
 from src.Board import Board
 from src.Colour import Colour
 from src.Move import Move
 
-from agents.Group41.mcts import MCTS
-from agents.Group41.board_state import BoardStateNP
-from agents.Group41.model import load_model
+try:
+    from agents.Group41.mcts_cpp import BoardState, MCTS
+except ImportError:
+    print("WARNING: C++ extension not found. Agent will fail unless compiled.")
+
 
 class HexAgent(AgentBase):
     """This class implements our Hex agent.
@@ -18,8 +25,9 @@ class HexAgent(AgentBase):
 
     def __init__(self, colour: Colour):
         super().__init__(colour)
-        self.model = load_model("agents/Group41/weights.pt")
-        self.mcts = MCTS(game=None, model=self.model)
+        self.model = load_model("agents/Group41/cpp_weights.pt")
+        self.use_gpu = torch.cuda.is_available()
+        self.internal_board = BoardState(11)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """The game engine will call this method to request a move from the agent.
@@ -37,16 +45,26 @@ class HexAgent(AgentBase):
             Move: The agent's move
         """
 
-        # 1. Convert Engine Board to NumPy Board
-        board_np = BoardStateNP(board)
-        board_np.current_colour = self.colour
-
-        # 2. Handle Swap Rule
+        # Handle Swap Rule
         # TODO: Add opening move database
         if turn == 2:
             return Move(-1, -1)
 
-        # 3. Run MCTS
-        # TODO: Update time_limit to be dynamic on remaining game time
-        best_move = self.mcts.search(board_np, time_limit=0.05)
-        return best_move
+        raw_grid = board.board
+        
+        flat_board = []
+        for row in range(11):
+            for col in range(11):
+                val = raw_grid[row][col]    # 0=Empty, 1=Red, 2=Blue
+                flat_board.append(int(val))
+
+        self.internal_board.set_board_from_vector(flat_board)
+        my_colour_int = 1 if self.colour == Colour.RED else 2
+        self.internal_board.current_colour = my_colour_int
+        mcts = MCTS(self.internal_board, self.model_path, self.use_gpu, 1.0)
+        best_move_int = mcts.search(4.9)
+
+        x = best_move_int // 11
+        y = best_move_int % 11
+        
+        return Move(x, y)

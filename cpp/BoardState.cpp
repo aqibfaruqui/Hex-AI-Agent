@@ -106,3 +106,44 @@ void BoardState::play_move(int cell) {
 }
 
 bool BoardState::is_full() const { return moves_count == board_len; }
+
+void BoardState::set_board_from_vector(std::vector<int> flat_board) {
+    reset(); 
+
+    for (int i = 0; i < board_len; i++) {
+        board[i] = static_cast<int8_t>(flat_board[i]);
+    }
+
+    moves_count = 0;
+    for (int i = 0; i < board_len; i++) {
+        if (board[i] == EMPTY) continue;
+        
+        moves_count++;
+        int player = board[i];
+
+        int x = i / size;
+        int y = i % size;
+        
+        const int dx[] = {-1, -1, 0, 0, 1, 1};
+        const int dy[] = {0, 1, -1, 1, -1, 0};
+
+        for (int k = 0; k < 6; k++) {
+            int nx = x + dx[k];
+            int ny = y + dy[k];
+            if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
+                int neighbor_idx = nx * size + ny;
+                if (board[neighbor_idx] == player) {
+                    union_sets(i, neighbor_idx);
+                }
+            }
+        }
+
+        if (player == RED) {
+            if (x == 0) union_sets(i, RED_TOP);
+            if (x == size - 1) union_sets(i, RED_BOTTOM);
+        } else if (player == BLUE) {
+            if (y == 0) union_sets(i, BLUE_LEFT);
+            if (y == size - 1) union_sets(i, BLUE_RIGHT);
+        }
+    }
+}

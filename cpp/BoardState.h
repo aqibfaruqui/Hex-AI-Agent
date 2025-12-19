@@ -31,4 +31,5 @@ public:
     void play_move(int cell);
     std::pair<int, bool> get_result() const; // Returns (value, finished)
     bool is_full() const;
+    void set_board_from_vector(std::vector<int> flat_board);
 };

@@ -14,6 +14,7 @@ PYBIND11_MODULE(mcts_cpp, m) {
         .def("get_legal_moves", &BoardState::get_legal_moves)
         .def("get_result", &BoardState::get_result)
         .def("is_full", &BoardState::is_full)
+        .def("set_board_from_vector", &BoardState::set_board_from_vector)
         .def_readwrite("current_colour", &BoardState::current_colour)
         .def_readwrite("winner", &BoardState::winner)
         .def_readwrite("board", &BoardState::board);
