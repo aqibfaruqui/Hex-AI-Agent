@@ -25,9 +25,12 @@ class HexAgent(AgentBase):
 
     def __init__(self, colour: Colour):
         super().__init__(colour)
-        self.model = load_model("agents/Group41/cpp_weights.pt")
+        self_dir = os.path.dirname(os.path.abspath(__file__))
+        self.model_path = os.path.join(self_dir, "cpp_weights.pt")
+        
+        if not os.path.exists(self.model_path):
+            print(f"CRITICAL ERROR: Model weights not found at {self.model_path}")        
         self.use_gpu = torch.cuda.is_available()
-        self.internal_board = BoardState(11)
 
     def make_move(self, turn: int, board: Board, opp_move: Move | None) -> Move:
         """The game engine will call this method to request a move from the agent.
@@ -50,18 +53,26 @@ class HexAgent(AgentBase):
         if turn == 2:
             return Move(-1, -1)
 
-        raw_grid = board.board
-        
+        tiles = board.tiles
         flat_board = []
         for row in range(11):
             for col in range(11):
-                val = raw_grid[row][col]    # 0=Empty, 1=Red, 2=Blue
-                flat_board.append(int(val))
+                tile = tiles[row][col]
+                if tile.colour == Colour.RED:
+                    val = 1
+                elif tile.colour == Colour.BLUE:
+                    val = 2
+                else:
+                    val = 0
+                flat_board.append(val)
 
-        self.internal_board.set_board_from_vector(flat_board)
+        internal_board = BoardState(11)
+        internal_board.set_board_from_vector(flat_board)
+
         my_colour_int = 1 if self.colour == Colour.RED else 2
-        self.internal_board.current_colour = my_colour_int
-        mcts = MCTS(self.internal_board, self.model_path, self.use_gpu, 1.0)
+        internal_board.current_colour = my_colour_int
+        
+        mcts = MCTS(internal_board, self.model_path, self.use_gpu, 1.0)
         best_move_int = mcts.search(4.9)
 
         x = best_move_int // 11
